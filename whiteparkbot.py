@@ -1,3 +1,6 @@
+#!/usr/bin/python3
+# -*- coding: utf-8 -*-
+
 import logging
 import xlwt
 from xlrd import *
@@ -102,7 +105,8 @@ class Whitepark():
         keyboard = ReplyKeyboardMarkup(row_width=1, resize_keyboard=True, one_time_keyboard=True)
         button_yes = KeyboardButton(text="Да")
         button_no = KeyboardButton(text="Нет")
-        keyboard.add(button_yes, button_no)
+        button_error = KeyboardButton(text="Товар не тот")
+        keyboard.add(button_yes, button_no, button_error)
         return keyboard
 
 if __name__ == '__main__':
@@ -123,6 +127,10 @@ if __name__ == '__main__':
                 whitepark_bot.step = "step1"
                 log.info(f'Пользователь: {message.chat.username}, получено сообщение: {message.text}')
                 bot.send_message(message.chat.id, 'Благодарю за работу. К следующему товару')
+            elif message.text == 'Товар не тот' and whitepark_bot.step == "step2":
+                whitepark_bot.step = "step1"
+                log.info(f'Пользователь: {message.chat.username}, получено сообщение: {message.text}')
+                bot.send_message(message.chat.id, 'Давай попробуем заного')
             elif message.content_type == 'photo' and whitepark_bot.step == "step1":
                 log.info(f'Пользователь: {message.chat.username}, прислал фото')
                 item = whitepark_bot.get_list_size(message)

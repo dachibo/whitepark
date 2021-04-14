@@ -12,7 +12,7 @@ import datetime
 from pyzbar.pyzbar import decode
 from PIL import Image
 import telebot
-from config import token, DATABASE
+from config import token, DATABASE, ip, port
 from telebot.types import ReplyKeyboardMarkup, KeyboardButton
 import fdb
 from lxml import html
@@ -103,7 +103,7 @@ class Whitepark():
     def firebird_connect(self):
         """Подключение к базе"""
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.connect(('78.153.6.87', 9090))
+        sock.connect((ip, port))
         sock.send(self.ean.encode('utf-8'))
         result = sock.recv(64)
         sock.close()

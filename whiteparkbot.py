@@ -1,11 +1,13 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
+import socket
 import logging
 import xlwt
 from xlrd import *
 from xlutils.copy import copy
 import os
+import time
 import datetime
 from pyzbar.pyzbar import decode
 from PIL import Image
@@ -13,7 +15,8 @@ import telebot
 from config import token, DATABASE
 from telebot.types import ReplyKeyboardMarkup, KeyboardButton
 import fdb
-from parce_shop import pars_shop
+from lxml import html
+import requests
 
 
 log = logging.getLogger('wp_bot')
@@ -37,6 +40,29 @@ class Whitepark():
         self.count = 1
         self.ean = None
         self.step = "step1"
+
+    def pars_shop(self, name_item):
+        """Парсинг товара на сайте"""
+
+        url = 'https://whitepark.ru'
+        catalogs = ["/catalog/ryukzaki/",
+                     "/catalog/obuv/",
+                     "/catalog/odezhda/",
+                     "/catalog/snou/",
+                     "/catalog/skeyt/",
+                     "/catalog/aksessuary/"]
+
+        for url_catalog in catalogs:
+            r = requests.get(url + url_catalog + '?PAGEN_1=1&pp=1000')
+            tree = html.fromstring(r.text)
+            items_list_lxml = tree.xpath('.//div[@class="grid catalog_grid"]')[0]
+            for item in items_list_lxml:
+                if name_item == str(item.xpath('.//footer[@class="goods_desc"]/a/text()')[0]):
+                    url_item = str(item.xpath('.//footer[@class="goods_desc"]/a/@href')[0])
+                    resp = requests.get(url + url_item)
+                    log.info(f'Ссылка на товар {resp.url}')
+                    tree_item = html.fromstring(resp.text)
+                    return list(set(tree_item.xpath('.//div[@class="wrapper__radiobutton_size"]/label/div/text()')))
 
     def query_analytics(self):
         """Аналитика запрошенных товаров"""
@@ -71,17 +97,17 @@ class Whitepark():
         """Получение"""
         self.barcode_image(message)
         self.item = self.firebird_connect()
+        print(self.item)
         return self.item
 
     def firebird_connect(self):
         """Подключение к базе"""
-        con = fdb.connect(**DATABASE)
-        cur = con.cursor()
-        cur.execute(f"select sprt.name from sprt join barcode on sprt.id = barcode.wareid where barcode = {self.ean}")
-        item_name = cur.fetchall()
-        con.close()
-        return item_name
-
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.connect(('78.153.6.87', 9090))
+        sock.send(self.ean.encode('utf-8'))
+        result = sock.recv(64)
+        sock.close()
+        return result.decode()
     def barcode_image(self, message):
         """Считывание штрихкода"""
 
@@ -89,6 +115,7 @@ class Whitepark():
         image_barcode = Image.open('image.jpg')
         decoded = decode(image_barcode)
         self.ean = decoded[0].data.decode("utf-8")
+        log.info(f'Артикул {self.ean}')
 
     def photo(self, message):
         """Сохранение фото"""
@@ -134,11 +161,12 @@ if __name__ == '__main__':
             elif message.content_type == 'photo' and whitepark_bot.step == "step1":
                 log.info(f'Пользователь: {message.chat.username}, прислал фото')
                 item = whitepark_bot.get_list_size(message)
-                if len(item) != 0:
-                    list_size = pars_shop(item[0][0])
+
+                if item != 'Товар не найден':
+                    list_size = whitepark_bot.pars_shop(item)
                     text_size = ', '.join(list_size)
-                    log.info(f'Пользователь: {message.chat.username}, Товар: {item[0][0]} найден')
-                    bot.send_message(message.chat.id, f'Товар: {item[0][0]}\nРазмеры в наличии: {text_size}\nВ предложенных есть необходимый размер?',
+                    log.info(f'Пользователь: {message.chat.username}, Товар: {item} найден')
+                    bot.send_message(message.chat.id, f'Товар: {item}\nРазмеры в наличии: {text_size}\nВ предложенных есть необходимый размер?',
                                     reply_markup=whitepark_bot.keyboard_v2())
                     whitepark_bot.step = "step2"
                 else:
@@ -163,5 +191,6 @@ if __name__ == '__main__':
             log.exception(f'{exc}')
             bot.send_message(message.chat.id, 'Что-то пошло не так, напиши @dachibo')
 
-
     bot.polling(none_stop=True)
+
+

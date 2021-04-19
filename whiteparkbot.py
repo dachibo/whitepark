@@ -1,23 +1,17 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
-import socket
 import logging
 import xlwt
 from xlrd import *
 from xlutils.copy import copy
 import os
-import time
 import datetime
-from pyzbar.pyzbar import decode
-from PIL import Image
 import telebot
-from config import token, DATABASE, ip, port
+from config import token, ip
 from telebot.types import ReplyKeyboardMarkup, KeyboardButton
-import fdb
 from lxml import html
 import requests
-
 
 log = logging.getLogger('wp_bot')
 
@@ -34,6 +28,7 @@ def configure_logging():
     log.addHandler(file_handler)
     log.setLevel(logging.DEBUG)
 
+
 class Whitepark():
     def __init__(self):
         self.item = None
@@ -46,11 +41,11 @@ class Whitepark():
 
         url = 'https://whitepark.ru'
         catalogs = ["/catalog/ryukzaki/",
-                     "/catalog/obuv/",
-                     "/catalog/odezhda/",
-                     "/catalog/snou/",
-                     "/catalog/skeyt/",
-                     "/catalog/aksessuary/"]
+                    "/catalog/obuv/",
+                    "/catalog/odezhda/",
+                    "/catalog/snou/",
+                    "/catalog/skeyt/",
+                    "/catalog/aksessuary/"]
 
         for url_catalog in catalogs:
             r = requests.get(url + url_catalog + '?PAGEN_1=1&pp=1000')
@@ -73,7 +68,7 @@ class Whitepark():
         style0 = xlwt.XFStyle()
         style0.font = font0
         if os.path.exists(f'{str(current_date)}.xls'):
-            workbook = open_workbook(f'{str(current_date)}.xls',formatting_info=True)
+            workbook = open_workbook(f'{str(current_date)}.xls', formatting_info=True)
             book = copy(workbook)
             sheet = book.get_sheet(0)
             self.count = workbook.sheet_by_index(0).nrows
@@ -95,36 +90,28 @@ class Whitepark():
 
     def get_list_size(self, message):
         """Получение"""
-        self.barcode_image(message)
-        self.item = self.firebird_connect()
-        print(self.item)
+        image_bytes = self.photo(message)
+        self.item = self.firebird_connect(image_bytes)
         return self.item
 
-    def firebird_connect(self):
+    def firebird_connect(self, image_bytes):
         """Подключение к базе"""
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.connect((ip, port))
-        sock.send(self.ean.encode('utf-8'))
-        result = sock.recv(64)
-        sock.close()
-        return result.decode()
-    def barcode_image(self, message):
-        """Считывание штрихкода"""
-
-        self.photo(message)
-        image_barcode = Image.open('image.jpg')
-        decoded = decode(image_barcode)
-        self.ean = decoded[0].data.decode("utf-8")
-        log.info(f'Артикул {self.ean}')
+        headers = {
+            'Content-Type': 'text/plain',
+        }
+        try:
+            response = requests.post(f'http://{ip}/item', headers=headers, data=image_bytes)
+        except requests.exceptions.ConnectionError:
+            log.info(response.status_code)
+        else:
+            return response.text
 
     def photo(self, message):
         """Сохранение фото"""
         fileID = message.photo[-1].file_id
         file_info = bot.get_file(fileID)
         downloaded_file = bot.download_file(file_info.file_path)
-
-        with open("image.jpg", 'wb') as new_file:
-            new_file.write(downloaded_file)
+        return downloaded_file
 
     def keyboard_v2(self):
         """Формирование общей клавиатуры"""
@@ -136,11 +123,13 @@ class Whitepark():
         keyboard.add(button_yes, button_no, button_error)
         return keyboard
 
+
 if __name__ == '__main__':
 
     configure_logging()
     bot = telebot.TeleBot(token)
     whitepark_bot = Whitepark()
+
 
     @bot.message_handler(content_types=['text', 'photo'])
     def telegram_send_me(message):
@@ -162,16 +151,20 @@ if __name__ == '__main__':
                 log.info(f'Пользователь: {message.chat.username}, прислал фото')
                 item = whitepark_bot.get_list_size(message)
 
-                if item != 'Товар не найден':
+                if item == 'Неверный формат штрихкода':
+                    log.info(f'Пользователь: {message.chat.username}, Неверный формат штрихкода')
+                    bot.send_message(message.chat.id, 'Неверный формат штрихкода')
+                elif item == 'Товар не найден':
+                    log.info(f'Пользователь: {message.chat.username}, Товар не найден')
+                    bot.send_message(message.chat.id, 'Товар не найден')
+                else:
                     list_size = whitepark_bot.pars_shop(item)
                     text_size = ', '.join(list_size)
                     log.info(f'Пользователь: {message.chat.username}, Товар: {item} найден')
-                    bot.send_message(message.chat.id, f'Товар: {item}\nРазмеры в наличии: {text_size}\nВ предложенных есть необходимый размер?',
-                                    reply_markup=whitepark_bot.keyboard_v2())
+                    bot.send_message(message.chat.id,
+                                     f'Товар: {item}\nРазмеры в наличии: {text_size}\nВ предложенных есть необходимый размер?',
+                                     reply_markup=whitepark_bot.keyboard_v2())
                     whitepark_bot.step = "step2"
-                else:
-                    log.info(f'Пользователь: {message.chat.username}, Товар не найден')
-                    bot.send_message(message.chat.id, 'Товар не найден')
             else:
                 log.info(f'Пользователь: {message.chat.username}, получено сообщение: {message.text}')
                 if whitepark_bot.step == "step2":
@@ -179,18 +172,9 @@ if __name__ == '__main__':
                 else:
                     bot.send_message(message.chat.id, 'Жду фото штрихкода')
 
-        except AttributeError as exc:
-            log.exception(f'Неверный формат штрихкода')
-            log.exception(f'{exc}')
-            bot.send_message(message.chat.id, 'Неверный формат штрихкода')
-        except IndexError as exc:
-            log.exception(f'Неверный формат штрихкода')
-            log.exception(f'{exc}')
-            bot.send_message(message.chat.id, 'Неверный формат штрихкода')
         except Exception as exc:
             log.exception(f'{exc}')
             bot.send_message(message.chat.id, 'Что-то пошло не так, напиши @dachibo')
 
+
     bot.polling(none_stop=True)
-
-

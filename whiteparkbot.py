@@ -9,9 +9,10 @@ import os
 import datetime
 import telebot
 from config import token, ip
-from telebot.types import ReplyKeyboardMarkup, KeyboardButton
+from telebot.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from lxml import html
 import requests
+from keyboa import Keyboa
 
 log = logging.getLogger('wp_bot')
 
@@ -34,6 +35,8 @@ class Whitepark():
         self.item = None
         self.count = 1
         self.ean = None
+        self.size = None
+        self.url_item = None
         self.step = "step1"
 
     def pars_shop(self, name_item):
@@ -55,6 +58,7 @@ class Whitepark():
                 if name_item == str(item.xpath('.//footer[@class="goods_desc"]/a/text()')[0]):
                     url_item = str(item.xpath('.//footer[@class="goods_desc"]/a/@href')[0])
                     resp = requests.get(url + url_item)
+                    self.url_item = resp.url
                     log.info(f'Ссылка на товар {resp.url}')
                     tree_item = html.fromstring(resp.text)
                     return list(set(tree_item.xpath('.//div[@class="wrapper__radiobutton_size"]/label/div/text()')))
@@ -78,13 +82,16 @@ class Whitepark():
             self.count = 1
         sheet.write(0, 0, 'Время запроса', style0)
         sheet.write(0, 1, 'Наименование позиции', style0)
-        sheet.write(0, 2, 'Штрихкод', style0)
+        sheet.write(0, 2, 'Размер', style0)
+        sheet.write(0, 3, 'Ссылка', style0)
         sheet.write(self.count, 0, str(time_now))
-        sheet.write(self.count, 1, self.item[0][0])
-        sheet.write(self.count, 2, self.ean)
+        sheet.write(self.count, 1, self.item)
+        sheet.write(self.count, 2, self.size)  # TODO - размер
+        sheet.write(self.count, 3, self.url_item)
         sheet.col(0).width = 5000
         sheet.col(1).width = 15000
         sheet.col(2).width = 7000
+        sheet.col(3).width = 15000
         name_book = f'{current_date}.xls'
         book.save(name_book)
 
@@ -116,12 +123,24 @@ class Whitepark():
     def keyboard_v2(self):
         """Формирование общей клавиатуры"""
 
-        keyboard = ReplyKeyboardMarkup(row_width=1, resize_keyboard=True, one_time_keyboard=True)
-        button_yes = KeyboardButton(text="Да")
-        button_no = KeyboardButton(text="Нет")
-        button_error = KeyboardButton(text="Товар не тот")
-        keyboard.add(button_yes, button_no, button_error)
-        return keyboard
+        yes_or_no = ["Да", "Нет", "Товар не тот"]
+        markup_inline = Keyboa(items=yes_or_no, copy_text_to_callback=True, items_in_row=1).keyboard
+        return markup_inline
+
+    def keyboard_clothing_sizes(self):
+        """Формирование кнопок с размерами одежды"""
+
+        clothing_sizes = ["XS", "S", "M", "L", "XL", "XXL", "Y"]
+        sizes = Keyboa(items=clothing_sizes, copy_text_to_callback=True, items_in_row=4).keyboard
+        return sizes
+
+    def keyboard_shoe_sizes(self):
+        """Формирование кнопок с размерами обуви"""
+
+        shoe_sizes = ["28", "29", "30.5", "31.5", "33", "34", "35", "36", "36.5", "37", "38", "39", "40", "40.5", "41",
+                      "41.5", "42", "42.5", "43", "43.5", "44", "45", "46", "46.5", "48", "49"]
+        sizes = Keyboa(items=shoe_sizes, copy_text_to_callback=True, items_in_row=4).keyboard
+        return sizes
 
 
 if __name__ == '__main__':
@@ -131,23 +150,40 @@ if __name__ == '__main__':
     whitepark_bot = Whitepark()
 
 
+    @bot.callback_query_handler(func=lambda call: True)
+    def answer(call):
+        if call.data == "Да":
+            whitepark_bot.step = "step1"
+            log.info(f'Пользователь: {call.message.chat.username}, получено сообщение: {call.data}')
+            bot.send_message(call.message.chat.id, 'Благодарю за работу. К следующему товару')
+
+        elif call.data == "Нет":
+            if "/catalog/obuv/" in whitepark_bot.url_item:
+                bot.send_message(call.message.chat.id,
+                                 f'Выбери необходимый размер',
+                                 reply_markup=whitepark_bot.keyboard_shoe_sizes())
+            else:
+                bot.send_message(call.message.chat.id,
+                                 f'Выбери необходимый размер',
+                                 reply_markup=whitepark_bot.keyboard_clothing_sizes())
+
+        elif call.data == "Товар не тот":
+            whitepark_bot.step = "step1"
+            log.info(f'Пользователь: {call.message.chat.username}, получено сообщение: {call.data}')
+            bot.send_message(call.message.chat.id, 'Давай попробуем заного')
+
+        else:
+            whitepark_bot.step = "step1"
+            log.info(f'Пользователь: {call.message.chat.username}, получено сообщение: {call.data}')
+            bot.send_message(call.message.chat.id, 'Благодарю за работу. К следующему товару')
+            whitepark_bot.size = call.data
+            whitepark_bot.query_analytics()
+
+
     @bot.message_handler(content_types=['text', 'photo'])
     def telegram_send_me(message):
         try:
-            if message.text == 'Нет' and whitepark_bot.step == "step2":
-                whitepark_bot.query_analytics()
-                whitepark_bot.step = "step1"
-                log.info(f'Пользователь: {message.chat.username}, получено сообщение: {message.text}')
-                bot.send_message(message.chat.id, 'Благодарю за работу. К следующему товару')
-            elif message.text == 'Да' and whitepark_bot.step == "step2":
-                whitepark_bot.step = "step1"
-                log.info(f'Пользователь: {message.chat.username}, получено сообщение: {message.text}')
-                bot.send_message(message.chat.id, 'Благодарю за работу. К следующему товару')
-            elif message.text == 'Товар не тот' and whitepark_bot.step == "step2":
-                whitepark_bot.step = "step1"
-                log.info(f'Пользователь: {message.chat.username}, получено сообщение: {message.text}')
-                bot.send_message(message.chat.id, 'Давай попробуем заного')
-            elif message.content_type == 'photo' and whitepark_bot.step == "step1":
+            if message.content_type == 'photo' and whitepark_bot.step == "step1":
                 log.info(f'Пользователь: {message.chat.username}, прислал фото')
                 item = whitepark_bot.get_list_size(message)
 
@@ -168,7 +204,7 @@ if __name__ == '__main__':
             else:
                 log.info(f'Пользователь: {message.chat.username}, получено сообщение: {message.text}')
                 if whitepark_bot.step == "step2":
-                    bot.send_message(message.chat.id, 'Да или Нет')
+                    bot.delete_message(message.chat.id, message.id)
                 else:
                     bot.send_message(message.chat.id, 'Жду фото штрихкода')
 

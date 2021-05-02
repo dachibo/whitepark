@@ -59,7 +59,7 @@ class Whitepark():
                     url_item = str(item.xpath('.//footer[@class="goods_desc"]/a/@href')[0])
                     resp = requests.get(url + url_item)
                     self.url_item = resp.url
-                    log.info(f'Ссылка на товар {resp.url}')
+                    log.info(f'Ссылка на товар {self.url_item}')
                     tree_item = html.fromstring(resp.text)
                     return list(set(tree_item.xpath('.//div[@class="wrapper__radiobutton_size"]/label/div/text()')))
 

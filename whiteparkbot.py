@@ -9,7 +9,6 @@ import os
 import datetime
 import telebot
 from config import token, ip
-from telebot.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from lxml import html
 import requests
 from keyboa import Keyboa
@@ -38,6 +37,7 @@ class Whitepark():
         self.size = None
         self.url_item = None
         self.step = "step1"
+        self.name_xls_file = None
 
     def pars_shop(self, name_item):
         """Парсинг товара на сайте"""
@@ -65,20 +65,20 @@ class Whitepark():
 
     def query_analytics(self):
         """Аналитика запрошенных товаров"""
-        current_date = datetime.date.today()
+        self.name_xls_file = datetime.date.today()
         time_now = datetime.datetime.strftime(datetime.datetime.now(), '%H:%M')
         font0 = xlwt.Font()
         font0.bold = True
         style0 = xlwt.XFStyle()
         style0.font = font0
-        if os.path.exists(f'{str(current_date)}.xls'):
-            workbook = open_workbook(f'{str(current_date)}.xls', formatting_info=True)
+        if os.path.exists(f'{str(self.name_xls_file)}.xls'):
+            workbook = open_workbook(f'{str(self.name_xls_file)}.xls', formatting_info=True)
             book = copy(workbook)
             sheet = book.get_sheet(0)
             self.count = workbook.sheet_by_index(0).nrows
         else:
             book = xlwt.Workbook('utf8')
-            sheet = book.add_sheet(f'{current_date}')
+            sheet = book.add_sheet(f'{self.name_xls_file}')
             self.count = 1
         sheet.write(0, 0, 'Время запроса', style0)
         sheet.write(0, 1, 'Наименование позиции', style0)
@@ -92,7 +92,7 @@ class Whitepark():
         sheet.col(1).width = 15000
         sheet.col(2).width = 7000
         sheet.col(3).width = 15000
-        name_book = f'{current_date}.xls'
+        name_book = f'{self.name_xls_file}.xls'
         book.save(name_book)
 
     def get_list_size(self, message):
@@ -100,6 +100,14 @@ class Whitepark():
         image_bytes = self.photo(message)
         self.item = self.firebird_connect(image_bytes)
         return self.item
+
+    def output_xls_server(self):
+        """Отправка xls файла на сервер"""
+        with open(self.name_xls_file, 'rb') as file_bytes:
+            headers = {
+                'Content-Type': 'text/plain',
+            }
+            requests.post(f'http://{ip}/file_xls', headers=headers, data=file_bytes.read())
 
     def firebird_connect(self, image_bytes):
         """Подключение к базе"""
@@ -149,30 +157,35 @@ if __name__ == '__main__':
     bot = telebot.TeleBot(token)
     whitepark_bot = Whitepark()
 
+    if datetime.datetime.now().hour >= 20 and whitepark_bot.name_xls_file is not None:
+        whitepark_bot.output_xls_server()
+        whitepark_bot.name_xls_file = None
 
     @bot.callback_query_handler(func=lambda call: True)
     def answer(call):
-        if call.data == "Да":
+        if call.data == "Да" and whitepark_bot.step == "step2":
             whitepark_bot.step = "step1"
             log.info(f'Пользователь: {call.message.chat.username}, получено сообщение: {call.data}')
             bot.send_message(call.message.chat.id, 'Благодарю за работу. К следующему товару')
 
-        elif call.data == "Нет":
+        elif call.data == "Нет" and whitepark_bot.step == "step2":
             if "/catalog/obuv/" in whitepark_bot.url_item:
+                whitepark_bot.step = "step3"
                 bot.send_message(call.message.chat.id,
                                  f'Выбери необходимый размер',
                                  reply_markup=whitepark_bot.keyboard_shoe_sizes())
             else:
+                whitepark_bot.step = "step3"
                 bot.send_message(call.message.chat.id,
                                  f'Выбери необходимый размер',
                                  reply_markup=whitepark_bot.keyboard_clothing_sizes())
 
-        elif call.data == "Товар не тот":
+        elif call.data == "Товар не тот" and whitepark_bot.step == "step2":
             whitepark_bot.step = "step1"
             log.info(f'Пользователь: {call.message.chat.username}, получено сообщение: {call.data}')
             bot.send_message(call.message.chat.id, 'Давай попробуем заного')
 
-        else:
+        elif whitepark_bot.step == "step3":
             whitepark_bot.step = "step1"
             log.info(f'Пользователь: {call.message.chat.username}, получено сообщение: {call.data}')
             bot.send_message(call.message.chat.id, 'Благодарю за работу. К следующему товару')

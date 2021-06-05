@@ -132,8 +132,10 @@ class Whitepark():
     def keyboard_anew(self):
         """Кнопка Начать заного"""
         button_anew = KeyboardButton('Начать заного')
-        greet_kb = ReplyKeyboardMarkup()
-        greet_kb.add(button_anew)
+        anew = ReplyKeyboardMarkup()
+        anew.add(button_anew)
+
+        return anew
 
     def keyboard_v2(self):
         """Формирование общей клавиатуры"""

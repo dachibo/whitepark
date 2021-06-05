@@ -132,7 +132,7 @@ class Whitepark():
     def keyboard_anew(self):
         """Кнопка Начать заного"""
         button_anew = KeyboardButton('Начать заного')
-        anew = ReplyKeyboardMarkup()
+        anew = ReplyKeyboardMarkup(resize_keyboard=True,one_time_keyboard=True,row_width=1)
         anew.add(button_anew)
 
         return anew
@@ -205,7 +205,7 @@ if __name__ == '__main__':
     @bot.message_handler(content_types=['text', 'photo'])
     def telegram_send_me(message):
         try:
-            if message.content_type == 'Начать заного':
+            if message.text == 'Начать заного':
                 whitepark_bot.step = "step1"
                 bot.send_message(message.chat.id, 'Давай попробуем заного')
                 log.info(f'Пользователь: {message.chat.username}, Нажал кнопку "Начать заного"')

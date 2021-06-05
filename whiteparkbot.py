@@ -3,6 +3,7 @@
 
 import logging
 import xlwt
+from telebot.types import KeyboardButton, ReplyKeyboardMarkup
 from xlrd import *
 from xlutils.copy import copy
 import os
@@ -128,6 +129,12 @@ class Whitepark():
         downloaded_file = bot.download_file(file_info.file_path)
         return downloaded_file
 
+    def keyboard_anew(self):
+        """Кнопка Начать заного"""
+        button_anew = KeyboardButton('Начать заного')
+        greet_kb = ReplyKeyboardMarkup()
+        greet_kb.add(button_anew)
+
     def keyboard_v2(self):
         """Формирование общей клавиатуры"""
 
@@ -196,16 +203,23 @@ if __name__ == '__main__':
     @bot.message_handler(content_types=['text', 'photo'])
     def telegram_send_me(message):
         try:
-            if message.content_type == 'photo' and whitepark_bot.step == "step1":
+            if message.content_type == 'Начать заного':
+                whitepark_bot.step = "step1"
+                bot.send_message(message.chat.id, 'Давай попробуем заного')
+                log.info(f'Пользователь: {message.chat.username}, Нажал кнопку "Начать заного"')
+
+            elif message.content_type == 'photo' and whitepark_bot.step == "step1":
                 log.info(f'Пользователь: {message.chat.username}, прислал фото')
                 item = whitepark_bot.get_list_size(message)
 
                 if item == 'Неверный формат штрихкода':
                     log.info(f'Пользователь: {message.chat.username}, Неверный формат штрихкода')
-                    bot.send_message(message.chat.id, 'Неверный формат штрихкода')
+                    bot.send_message(message.chat.id, 'Неверный формат штрихкода',
+                             reply_markup=whitepark_bot.keyboard_anew())
                 elif item == 'Товар не найден':
                     log.info(f'Пользователь: {message.chat.username}, Товар не найден')
-                    bot.send_message(message.chat.id, 'Товар не найден')
+                    bot.send_message(message.chat.id, 'Товар не найден',
+                             reply_markup=whitepark_bot.keyboard_anew())
                 else:
                     list_size = whitepark_bot.pars_shop(item)
                     text_size = ', '.join(list_size)
@@ -219,11 +233,13 @@ if __name__ == '__main__':
                 if whitepark_bot.step == "step2":
                     bot.delete_message(message.chat.id, message.id)
                 else:
-                    bot.send_message(message.chat.id, 'Жду фото штрихкода')
+                    bot.send_message(message.chat.id, 'Жду фото штрихкода',
+                             reply_markup=whitepark_bot.keyboard_anew())
 
         except Exception as exc:
             log.exception(f'{exc}')
-            bot.send_message(message.chat.id, 'Что-то пошло не так, напиши @dachibo')
+            bot.send_message(message.chat.id, 'Что-то пошло не так, напиши @dachibo',
+                             reply_markup=whitepark_bot.keyboard_anew())
 
 
     bot.polling(none_stop=True)

@@ -10,5 +10,6 @@ if os.path.exists("/var/www/u1250062/data/%s.xls" % data):
             'Content-Type': 'text/plain',
         }
         res = requests.post('http://%s/file_output' % ip, headers=headers, data=file_bytes.read())
-    print(res)
+    if res.status_code == 200:
+        os.remove("/var/www/u1250062/data/%s.xls" % data)
 

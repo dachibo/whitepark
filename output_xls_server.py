@@ -9,6 +9,6 @@ if os.path.exists("/var/www/u1250062/data/%s." % data):
         headers = {
             'Content-Type': 'text/plain',
         }
-        res = requests.post(f'http://{ip}/file_xls', headers=headers, data=file_bytes.read())
+        res = requests.post(f'http://{ip}/file_output', headers=headers, data=file_bytes.read())
 
 

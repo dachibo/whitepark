@@ -4,8 +4,8 @@ import requests
 from config import ip
 
 data = str(datetime.now().date())
-if os.path.exists(f'/var/www/u1250062/data/{data}.xls'):
-    with open(f'/var/www/u1250062/data/{data}.xls', 'rb') as file_bytes:
+if os.path.exists(f"/var/www/u1250062/data/{data}.xls"):
+    with open(f"/var/www/u1250062/data/{data}.xls", 'rb') as file_bytes:
         headers = {
             'Content-Type': 'text/plain',
         }

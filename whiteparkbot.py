@@ -38,7 +38,6 @@ class Whitepark():
         self.size = None
         self.url_item = None
         self.step = "step1"
-        self.name_xls_file = None
 
     def pars_shop(self, name_item):
         """Парсинг товара на сайте"""
@@ -102,14 +101,6 @@ class Whitepark():
         self.item = self.firebird_connect(image_bytes)
         return self.item
 
-    def output_xls_server(self):
-        """Отправка xls файла на сервер"""
-        with open(self.name_xls_file, 'rb') as file_bytes:
-            headers = {
-                'Content-Type': 'text/plain',
-            }
-            requests.post(f'http://{ip}/file_xls', headers=headers, data=file_bytes.read())
-
     def firebird_connect(self, image_bytes):
         """Подключение к базе"""
         headers = {
@@ -165,10 +156,6 @@ if __name__ == '__main__':
     configure_logging()
     bot = telebot.TeleBot(token)
     whitepark_bot = Whitepark()
-
-    if datetime.datetime.now().hour >= 20 and whitepark_bot.name_xls_file is not None:
-        whitepark_bot.output_xls_server()
-        whitepark_bot.name_xls_file = None
 
     @bot.callback_query_handler(func=lambda call: True)
     def answer(call):
